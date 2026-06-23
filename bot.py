@@ -11,6 +11,8 @@ if not TOKEN:
 bot = telebot.TeleBot(TOKEN)
 
 FREE_PACK_PATH = "free_pack.zip"
+CUSTOM_IMAGE_STARS = 750
+
 user_states = {}
 
 
@@ -42,13 +44,62 @@ def start(message):
     )
 
 
+@bot.message_handler(func=lambda message: message.text == "🎨 Custom Image — $15")
+def custom_image(message):
+    bot.send_invoice(
+        chat_id=message.chat.id,
+        title="Custom Anime Image",
+        description=(
+            "1 custom AI anime-style image.\n"
+            "Send your character idea, outfit, pose, mood and references after payment."
+        ),
+        invoice_payload="custom_image_15",
+        provider_token="",
+        currency="XTR",
+        prices=[types.LabeledPrice(label="Custom Image", amount=CUSTOM_IMAGE_STARS)]
+    )
+
+
+@bot.pre_checkout_query_handler(func=lambda query: True)
+def checkout(pre_checkout_query):
+    bot.answer_pre_checkout_query(pre_checkout_query.id, ok=True)
+
+
+@bot.message_handler(content_types=["successful_payment"])
+def got_payment(message):
+    payment = message.successful_payment
+
+    if payment.invoice_payload == "custom_image_15":
+        user_states[message.chat.id] = "waiting_custom_description"
+
+        bot.send_message(
+            message.chat.id,
+            "✅ Payment received!\n\n"
+            "Now send your custom image request in one message:\n\n"
+            "1. Character idea or reference\n"
+            "2. Outfit/style\n"
+            "3. Pose or mood\n"
+            "4. Wallpaper size if needed\n\n"
+            "Example:\n"
+            "Anime girl with white hair, red eyes, black dress, dark cyberpunk city background."
+        )
+
+        if ADMIN_ID:
+            bot.send_message(
+                int(ADMIN_ID),
+                "💰 New paid Custom Image order received!\n\n"
+                f"User ID: {message.chat.id}\n"
+                f"Stars paid: {payment.total_amount}\n"
+                f"Charge ID: {payment.telegram_payment_charge_id}"
+            )
+
+
 @bot.message_handler(func=lambda message: True, content_types=["text"])
 def handle_text(message):
     chat_id = message.chat.id
     text = message.text
 
     if user_states.get(chat_id) == "waiting_custom_description":
-        description = text
         user_states.pop(chat_id, None)
 
         username = message.from_user.username
@@ -56,19 +107,18 @@ def handle_text(message):
 
         bot.send_message(
             chat_id,
-            "✅ Your custom image request has been received!\n\n"
-            "Price: $15\n"
-            "I will review your request and prepare payment instructions soon.",
+            "✅ Your request has been received!\n\n"
+            "I will review it and prepare your custom image.",
             reply_markup=main_menu()
         )
 
         if ADMIN_ID:
             bot.send_message(
                 int(ADMIN_ID),
-                "🎨 New Custom Image Request — $15\n\n"
+                "🎨 Custom Image Request Details\n\n"
                 f"From: {user_info}\n"
                 f"User ID: {chat_id}\n\n"
-                f"Request:\n{description}"
+                f"Request:\n{text}"
             )
 
         return
@@ -96,20 +146,6 @@ def handle_text(message):
 
     elif text == "🔥 All Packs Bundle":
         bot.send_message(chat_id, "🔥 All Packs Bundle — $7\n\nPayment system coming soon.")
-
-    elif text == "🎨 Custom Image — $15":
-        user_states[chat_id] = "waiting_custom_description"
-        bot.send_message(
-            chat_id,
-            "🎨 Custom Anime Image — $15\n\n"
-            "Send your request in one message:\n\n"
-            "1. Character idea or reference\n"
-            "2. Outfit/style\n"
-            "3. Pose or mood\n"
-            "4. Wallpaper size if needed\n\n"
-            "Example:\n"
-            "Anime girl with white hair, red eyes, black dress, dark cyberpunk city background."
-        )
 
     elif text == "ℹ️ About":
         bot.send_message(
