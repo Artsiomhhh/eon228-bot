@@ -1,1 +1,6 @@
-8851744080:AAEXZjZrta3SE09fP7y8gCtO5WDsbHB8Wi4
+import os
+import telebot
+from telebot import types
+
+TOKEN = os.getenv("BOT_TOKEN")
+bot = telebot.TeleBot(TOKEN)
