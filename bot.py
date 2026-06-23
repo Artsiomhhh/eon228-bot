@@ -18,10 +18,18 @@ def start(message):
     markup.add("💙 Android 18 Pack", "🔥 All Packs Bundle")
 
     bot.send_message(
-        message.chat.id,
-        "Welcome to EgoEON AI Store ✨\n\nChoose your anime wallpaper pack:",
-        reply_markup=markup
-    )
+    message.chat.id,
+    "🔥 Welcome to EgoEON AI Store\n\n"
+    "Download exclusive AI anime wallpaper packs:\n\n"
+    "💖 Nami Pack\n"
+    "❤️ Yor Pack\n"
+    "💙 Android 18 Pack\n"
+    "🎁 Free Wallpapers\n"
+    "🔥 Bundle Pack\n\n"
+    "📱 All wallpapers are optimized for mobile devices.\n\n"
+    "Choose a pack below 👇",
+    reply_markup=markup
+)
 
 
 @bot.message_handler(func=lambda message: True)
