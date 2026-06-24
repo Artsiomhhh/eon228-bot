@@ -1,19 +1,85 @@
 import os
+import json
+import base64
+import requests
 import telebot
 from telebot import types
 
 TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = os.getenv("ADMIN_ID")
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
+GITHUB_REPO = os.getenv("GITHUB_REPO")
+GITHUB_BRANCH = os.getenv("GITHUB_BRANCH", "main")
 
 if not TOKEN:
     raise RuntimeError("BOT_TOKEN is not set")
+if not GITHUB_TOKEN:
+    raise RuntimeError("GITHUB_TOKEN is not set")
+if not GITHUB_REPO:
+    raise RuntimeError("GITHUB_REPO is not set")
 
 bot = telebot.TeleBot(TOKEN)
 
 FREE_PACK_PATH = "free_pack.zip"
+STATS_PATH = "stats.json"
 CUSTOM_IMAGE_STARS = 750
 
 user_states = {}
+
+
+def github_headers():
+    return {
+        "Authorization": f"Bearer {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github+json"
+    }
+
+
+def github_file_url(path):
+    return f"https://api.github.com/repos/{GITHUB_REPO}/contents/{path}"
+
+
+def load_stats():
+    url = github_file_url(STATS_PATH)
+    r = requests.get(url, headers=github_headers(), params={"ref": GITHUB_BRANCH})
+
+    if r.status_code == 404:
+        return {"free_downloads": 0}, None
+
+    r.raise_for_status()
+    data = r.json()
+    content = base64.b64decode(data["content"]).decode("utf-8")
+    return json.loads(content), data["sha"]
+
+
+def save_stats(stats, sha=None):
+    url = github_file_url(STATS_PATH)
+    content = base64.b64encode(
+        json.dumps(stats, indent=2).encode("utf-8")
+    ).decode("utf-8")
+
+    payload = {
+        "message": "Update stats",
+        "content": content,
+        "branch": GITHUB_BRANCH
+    }
+
+    if sha:
+        payload["sha"] = sha
+
+    r = requests.put(url, headers=github_headers(), json=payload)
+    r.raise_for_status()
+
+
+def increment_free_downloads():
+    stats, sha = load_stats()
+    stats["free_downloads"] = stats.get("free_downloads", 0) + 1
+    save_stats(stats, sha)
+    return stats["free_downloads"]
+
+
+def get_free_downloads():
+    stats, _ = load_stats()
+    return stats.get("free_downloads", 0)
 
 
 def main_menu():
@@ -28,11 +94,16 @@ def main_menu():
 
 @bot.message_handler(commands=["start"])
 def start(message):
+    try:
+        downloads = get_free_downloads()
+    except Exception:
+        downloads = 0
+
     bot.send_message(
         message.chat.id,
         "🔥 Welcome to EgoEON AI Store\n\n"
         "Download exclusive AI anime wallpaper packs:\n\n"
-        "🎁 Free Wallpapers\n"
+        f"🎁 Free Pack downloads: {downloads}\n\n"
         "💖 Nami Pack\n"
         "❤️ Yor Pack\n"
         "💙 Android 18 Pack\n"
@@ -125,15 +196,22 @@ def handle_text(message):
                     caption="🎁 Free Anime Wallpaper Pack by EgoEON AI"
                 )
 
+            try:
+                new_count = increment_free_downloads()
+            except Exception:
+                new_count = "unknown"
+
+            bot.send_message(chat_id, f"✅ Total free pack downloads: {new_count}")
+
             if ADMIN_ID:
                 username = message.from_user.username
                 user_info = f"@{username}" if username else f"ID: {chat_id}"
-
                 bot.send_message(
                     int(ADMIN_ID),
                     "🎁 Free Pack downloaded\n\n"
                     f"User: {user_info}\n"
-                    f"User ID: {chat_id}"
+                    f"User ID: {chat_id}\n"
+                    f"Total downloads: {new_count}"
                 )
         else:
             bot.send_message(chat_id, "❌ free_pack.zip not found.")
