@@ -197,12 +197,12 @@ def handle_text(message):
                 )
 
             try:
-            new_count = increment_free_downloads()
+                new_count = increment_free_downloads()
             except Exception as e:
-            new_count = "unknown"
-            bot.send_message(chat_id, f"⚠️ Stats error: {e}")
+                new_count = "unknown"
+                bot.send_message(chat_id, f"⚠️ Stats error: {e}")
 
-            bot.send_message(chat_id, f"✅ Total free pack downloads: {new_count}")
+                bot.send_message(chat_id, f"✅ Total free pack downloads: {new_count}")
 
             if ADMIN_ID:
                 username = message.from_user.username
