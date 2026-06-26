@@ -227,5 +227,6 @@ def handle_text(message):
         bot.send_message(chat_id, "Choose a pack from the menu 👇", reply_markup=main_menu())
 
 
-print("Bot started")
+print("Bot started - clean store version")
+bot.remove_webhook()
 bot.infinity_polling()
