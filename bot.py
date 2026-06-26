@@ -24,8 +24,6 @@ FREE_PACK_PATH = "free_pack.zip"
 STATS_PATH = "stats.json"
 CUSTOM_IMAGE_STARS = 750
 
-user_states = {}
-
 
 def github_headers():
     return {
@@ -39,8 +37,11 @@ def github_file_url(path):
 
 
 def load_stats():
-    url = github_file_url(STATS_PATH)
-    r = requests.get(url, headers=github_headers(), params={"ref": GITHUB_BRANCH})
+    r = requests.get(
+        github_file_url(STATS_PATH),
+        headers=github_headers(),
+        params={"ref": GITHUB_BRANCH}
+    )
 
     if r.status_code == 404:
         return {"free_downloads": 0}, None
@@ -52,7 +53,6 @@ def load_stats():
 
 
 def save_stats(stats, sha=None):
-    url = github_file_url(STATS_PATH)
     content = base64.b64encode(
         json.dumps(stats, indent=2).encode("utf-8")
     ).decode("utf-8")
@@ -66,8 +66,17 @@ def save_stats(stats, sha=None):
     if sha:
         payload["sha"] = sha
 
-    r = requests.put(url, headers=github_headers(), json=payload)
+    r = requests.put(
+        github_file_url(STATS_PATH),
+        headers=github_headers(),
+        json=payload
+    )
     r.raise_for_status()
+
+
+def get_free_downloads():
+    stats, _ = load_stats()
+    return stats.get("free_downloads", 0)
 
 
 def increment_free_downloads():
@@ -75,11 +84,6 @@ def increment_free_downloads():
     stats["free_downloads"] = stats.get("free_downloads", 0) + 1
     save_stats(stats, sha)
     return stats["free_downloads"]
-
-
-def get_free_downloads():
-    stats, _ = load_stats()
-    return stats.get("free_downloads", 0)
 
 
 def main_menu():
@@ -135,9 +139,9 @@ def checkout(pre_checkout_query):
 
 @bot.message_handler(content_types=["successful_payment"])
 def got_payment(message):
-    if message.successful_payment.invoice_payload == "custom_image_15":
-        user_states[message.chat.id] = "waiting_custom_description"
+    payment = message.successful_payment
 
+    if payment.invoice_payload == "custom_image_15":
         bot.send_message(
             message.chat.id,
             "✅ Payment received!\n\n"
@@ -149,11 +153,14 @@ def got_payment(message):
         )
 
         if ADMIN_ID:
+            username = message.from_user.username
             bot.send_message(
                 int(ADMIN_ID),
                 "💰 New paid Custom Image order!\n\n"
+                f"User: @{username if username else 'no_username'}\n"
                 f"User ID: {message.chat.id}\n"
-                f"Stars paid: {message.successful_payment.total_amount}"
+                f"Stars paid: {payment.total_amount}\n"
+                f"Charge ID: {payment.telegram_payment_charge_id}"
             )
 
 
@@ -161,29 +168,7 @@ def got_payment(message):
 def handle_text(message):
     chat_id = message.chat.id
     text = message.text
-
-    if user_states.get(chat_id) == "waiting_custom_description":
-        user_states.pop(chat_id, None)
-
-        username = message.from_user.username
-        user_info = f"@{username}" if username else f"ID: {chat_id}"
-
-        bot.send_message(
-            chat_id,
-            "✅ Your request has been received!\n\n"
-            "I will review it and prepare your custom image.",
-            reply_markup=main_menu()
-        )
-
-        if ADMIN_ID:
-            bot.send_message(
-                int(ADMIN_ID),
-                "🎨 Custom Image Request Details\n\n"
-                f"From: {user_info}\n"
-                f"User ID: {chat_id}\n\n"
-                f"Request:\n{text}"
-            )
-        return
+    username = message.from_user.username
 
     if text == "🎁 Free Pack":
         if os.path.exists(FREE_PACK_PATH):
@@ -202,15 +187,13 @@ def handle_text(message):
                 new_count = "unknown"
                 bot.send_message(chat_id, f"⚠️ Stats error: {e}")
 
-                bot.send_message(chat_id, f"✅ Total free pack downloads: {new_count}")
+            bot.send_message(chat_id, f"✅ Total free pack downloads: {new_count}")
 
             if ADMIN_ID:
-                username = message.from_user.username
-                user_info = f"@{username}" if username else f"ID: {chat_id}"
                 bot.send_message(
                     int(ADMIN_ID),
                     "🎁 Free Pack downloaded\n\n"
-                    f"User: {user_info}\n"
+                    f"User: @{username if username else 'no_username'}\n"
                     f"User ID: {chat_id}\n"
                     f"Total downloads: {new_count}"
                 )
