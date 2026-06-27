@@ -20,10 +20,17 @@ if not GITHUB_REPO:
 
 bot = telebot.TeleBot(TOKEN)
 
-FREE_PACK_PATH = "marin_kitagawa_free_pack.zip"
 PREVIEW_PATH = "marin_preview.png"
 STATS_PATH = "stats.json"
 CUSTOM_IMAGE_STARS = 750
+
+FREE_IMAGES = [
+    "marin_01.png",
+    "marin_02.png",
+    "marin_03.png",
+    "marin_04.png",
+    "marin_05.png",
+]
 
 
 def github_headers():
@@ -183,24 +190,25 @@ def handle_text(message):
                         "Includes 5 exclusive HD wallpapers 📱\n\n"
                         "✨ AI generated\n"
                         "💖 Mobile optimized\n\n"
-                        "Download starts below 👇"
+                        "Sending wallpapers below 👇"
                     )
                 )
 
-        if os.path.exists(FREE_PACK_PATH):
-            bot.send_message(chat_id, "🎁 Sending your free Marin Kitagawa pack...")
+        if all(os.path.exists(path) for path in FREE_IMAGES):
+            files = []
+            media = []
 
-            with open(FREE_PACK_PATH, "rb") as file:
-                bot.send_document(
-                    chat_id,
-                    file,
-                    caption=(
-                        "🎁 FREE Marin Kitagawa Pack\n\n"
-                        "✅ 5 HD wallpapers\n"
-                        "📱 Phone optimized\n"
-                        "💖 AI generated"
-                    )
-                )
+            try:
+                for path in FREE_IMAGES:
+                    f = open(path, "rb")
+                    files.append(f)
+                    media.append(types.InputMediaPhoto(f))
+
+                bot.send_media_group(chat_id, media)
+
+            finally:
+                for f in files:
+                    f.close()
 
             try:
                 new_count = increment_free_downloads()
@@ -223,7 +231,10 @@ def handle_text(message):
                     f"Total downloads: {new_count}"
                 )
         else:
-            bot.send_message(chat_id, "❌ marin_kitagawa_free_pack.zip not found.")
+            bot.send_message(
+                chat_id,
+                "❌ One or more Marin wallpaper files are missing."
+            )
 
     elif text == "💖 Nami Pack":
         bot.send_message(chat_id, "💖 Nami Pack — $3\n\nPayment system coming soon.")
@@ -252,6 +263,6 @@ def handle_text(message):
         bot.send_message(chat_id, "Choose a pack from the menu 👇", reply_markup=main_menu())
 
 
-print("Bot started - Marin Kitagawa free pack version")
+print("Bot started - Marin album version")
 bot.remove_webhook()
 bot.infinity_polling()
