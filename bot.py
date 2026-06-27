@@ -166,7 +166,7 @@ def got_payment(message):
             )
 
 
-@bot.message_handler(func=lambda message: True, content_types=["text"])
+@bot.message_handler(content_types=["text"], func=lambda message: True)
 def handle_text(message):
     chat_id = message.chat.id
     text = message.text
