@@ -20,7 +20,8 @@ if not GITHUB_REPO:
 
 bot = telebot.TeleBot(TOKEN)
 
-FREE_PACK_PATH = "free_pack.zip"
+FREE_PACK_PATH = "marin_kitagawa_free_pack.zip"
+PREVIEW_PATH = "marin_preview.png"
 STATS_PATH = "stats.json"
 CUSTOM_IMAGE_STARS = 750
 
@@ -88,7 +89,7 @@ def increment_free_downloads():
 
 def main_menu():
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    markup.add("🎁 Free Pack")
+    markup.add("🎁 FREE Marin Kitagawa Pack")
     markup.add("💖 Nami Pack", "❤️ Yor Pack")
     markup.add("💙 Android 18 Pack", "🔥 All Packs Bundle")
     markup.add("🎨 Custom Image — $15")
@@ -107,7 +108,8 @@ def start(message):
         message.chat.id,
         "🔥 Welcome to EgoEON AI Store\n\n"
         "Download exclusive AI anime wallpaper packs:\n\n"
-        f"🎁 Free Pack downloads: {downloads}\n\n"
+        f"🎁 FREE Marin Kitagawa Pack downloads: {downloads}\n"
+        "✅ Includes 5 HD wallpapers\n\n"
         "💖 Nami Pack\n"
         "❤️ Yor Pack\n"
         "💙 Android 18 Pack\n"
@@ -170,15 +172,34 @@ def handle_text(message):
     text = message.text
     username = message.from_user.username
 
-    if text == "🎁 Free Pack":
+    if text == "🎁 FREE Marin Kitagawa Pack":
+        if os.path.exists(PREVIEW_PATH):
+            with open(PREVIEW_PATH, "rb") as photo:
+                bot.send_photo(
+                    chat_id,
+                    photo,
+                    caption=(
+                        "🎁 FREE Marin Kitagawa Pack\n\n"
+                        "Includes 5 exclusive HD wallpapers 📱\n\n"
+                        "✨ AI generated\n"
+                        "💖 Mobile optimized\n\n"
+                        "Download starts below 👇"
+                    )
+                )
+
         if os.path.exists(FREE_PACK_PATH):
-            bot.send_message(chat_id, "🎁 Sending your free wallpaper pack...")
+            bot.send_message(chat_id, "🎁 Sending your free Marin Kitagawa pack...")
 
             with open(FREE_PACK_PATH, "rb") as file:
                 bot.send_document(
                     chat_id,
                     file,
-                    caption="🎁 Free Anime Wallpaper Pack by EgoEON AI"
+                    caption=(
+                        "🎁 FREE Marin Kitagawa Pack\n\n"
+                        "✅ 5 HD wallpapers\n"
+                        "📱 Phone optimized\n"
+                        "💖 AI generated"
+                    )
                 )
 
             try:
@@ -187,18 +208,22 @@ def handle_text(message):
                 new_count = "unknown"
                 bot.send_message(chat_id, f"⚠️ Stats error: {e}")
 
-            bot.send_message(chat_id, f"✅ Total free pack downloads: {new_count}")
+            bot.send_message(
+                chat_id,
+                "✅ Done! Enjoy your free wallpapers 💖\n\n"
+                f"Total free pack downloads: {new_count}"
+            )
 
             if ADMIN_ID:
                 bot.send_message(
                     int(ADMIN_ID),
-                    "🎁 Free Pack downloaded\n\n"
+                    "🎁 FREE Marin Kitagawa Pack downloaded\n\n"
                     f"User: @{username if username else 'no_username'}\n"
                     f"User ID: {chat_id}\n"
                     f"Total downloads: {new_count}"
                 )
         else:
-            bot.send_message(chat_id, "❌ free_pack.zip not found.")
+            bot.send_message(chat_id, "❌ marin_kitagawa_free_pack.zip not found.")
 
     elif text == "💖 Nami Pack":
         bot.send_message(chat_id, "💖 Nami Pack — $3\n\nPayment system coming soon.")
@@ -227,6 +252,6 @@ def handle_text(message):
         bot.send_message(chat_id, "Choose a pack from the menu 👇", reply_markup=main_menu())
 
 
-print("Bot started - clean store version")
+print("Bot started - Marin Kitagawa free pack version")
 bot.remove_webhook()
 bot.infinity_polling()
