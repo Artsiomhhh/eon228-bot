@@ -265,4 +265,4 @@ def handle_text(message):
 
 print("Bot started - Marin album version")
 bot.remove_webhook()
-bot.infinity_polling()
+bot.infinity_polling(skip_pending=True)
