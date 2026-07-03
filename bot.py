@@ -33,6 +33,14 @@ FREE_IMAGES = [
 ]
 
 
+def default_stats():
+    return {
+        "starts": 0,
+        "free_clicks": 0,
+        "free_downloads": 0
+    }
+
+
 def github_headers():
     return {
         "Authorization": f"Bearer {GITHUB_TOKEN}",
@@ -52,12 +60,22 @@ def load_stats():
     )
 
     if r.status_code == 404:
-        return {"free_downloads": 0}, None
+        return default_stats(), None
 
     r.raise_for_status()
     data = r.json()
     content = base64.b64decode(data["content"]).decode("utf-8")
-    return json.loads(content), data["sha"]
+
+    try:
+        stats = json.loads(content)
+    except Exception:
+        stats = default_stats()
+
+    for key, value in default_stats().items():
+        if key not in stats:
+            stats[key] = value
+
+    return stats, data["sha"]
 
 
 def save_stats(stats, sha=None):
@@ -66,7 +84,7 @@ def save_stats(stats, sha=None):
     ).decode("utf-8")
 
     payload = {
-        "message": "Update stats",
+        "message": "Update bot stats",
         "content": content,
         "branch": GITHUB_BRANCH
     }
@@ -82,16 +100,16 @@ def save_stats(stats, sha=None):
     r.raise_for_status()
 
 
-def get_free_downloads():
-    stats, _ = load_stats()
-    return stats.get("free_downloads", 0)
-
-
-def increment_free_downloads():
+def update_stat(key):
     stats, sha = load_stats()
-    stats["free_downloads"] = stats.get("free_downloads", 0) + 1
+    stats[key] = stats.get(key, 0) + 1
     save_stats(stats, sha)
-    return stats["free_downloads"]
+    return stats
+
+
+def get_stats():
+    stats, _ = load_stats()
+    return stats
 
 
 def main_menu():
@@ -107,25 +125,39 @@ def main_menu():
 @bot.message_handler(commands=["start"])
 def start(message):
     try:
-        downloads = get_free_downloads()
+        stats = update_stat("starts")
     except Exception:
-        downloads = 0
+        stats = default_stats()
 
     bot.send_message(
         message.chat.id,
-        "🔥 Welcome to EgoEON AI Store\n\n"
-        "Download exclusive AI anime wallpaper packs:\n\n"
-        f"🎁 FREE Marin Kitagawa Pack downloads: {downloads}\n"
-        "✅ Includes 5 HD wallpapers\n\n"
-        "💖 Nami Pack\n"
-        "❤️ Yor Pack\n"
-        "💙 Android 18 Pack\n"
-        "🔥 Bundle Pack\n"
-        "🎨 Custom Image — $15\n\n"
-        "📱 All wallpapers are optimized for mobile devices.\n\n"
-        "Choose a pack below 👇",
+        "🎁 FREE Marin Kitagawa Pack\n\n"
+        "Inside:\n"
+        "✅ 5 HD anime wallpapers\n"
+        "📱 Phone optimized\n"
+        "✨ AI generated\n\n"
+        f"🔥 Claimed by: {stats.get('free_downloads', 0)} people\n\n"
+        "Tap the button below to download instantly 👇",
         reply_markup=main_menu()
     )
+
+
+@bot.message_handler(commands=["stats"])
+def stats_command(message):
+    if not ADMIN_ID or str(message.chat.id) != str(ADMIN_ID):
+        return
+
+    try:
+        stats = get_stats()
+        bot.send_message(
+            message.chat.id,
+            "📊 Bot Stats\n\n"
+            f"Starts: {stats.get('starts', 0)}\n"
+            f"Free pack clicks: {stats.get('free_clicks', 0)}\n"
+            f"Free downloads: {stats.get('free_downloads', 0)}"
+        )
+    except Exception as e:
+        bot.send_message(message.chat.id, f"Stats error: {e}")
 
 
 @bot.message_handler(func=lambda message: message.text == "🎨 Custom Image — $15")
@@ -154,22 +186,16 @@ def got_payment(message):
         bot.send_message(
             message.chat.id,
             "✅ Payment received!\n\n"
-            "Now send your custom image request in one message:\n\n"
-            "1. Character idea or reference\n"
-            "2. Outfit/style\n"
-            "3. Pose or mood\n"
-            "4. Wallpaper size if needed"
+            "Now send your custom image request in one message."
         )
 
         if ADMIN_ID:
-            username = message.from_user.username
             bot.send_message(
                 int(ADMIN_ID),
                 "💰 New paid Custom Image order!\n\n"
-                f"User: @{username if username else 'no_username'}\n"
+                f"User: @{message.from_user.username or 'no_username'}\n"
                 f"User ID: {message.chat.id}\n"
-                f"Stars paid: {payment.total_amount}\n"
-                f"Charge ID: {payment.telegram_payment_charge_id}"
+                f"Stars paid: {payment.total_amount}"
             )
 
 
@@ -177,9 +203,14 @@ def got_payment(message):
 def handle_text(message):
     chat_id = message.chat.id
     text = message.text
-    username = message.from_user.username
+    username = message.from_user.username or "no_username"
 
     if text == "🎁 FREE Marin Kitagawa Pack":
+        try:
+            update_stat("free_clicks")
+        except Exception:
+            pass
+
         if os.path.exists(PREVIEW_PATH):
             with open(PREVIEW_PATH, "rb") as photo:
                 bot.send_photo(
@@ -187,9 +218,7 @@ def handle_text(message):
                     photo,
                     caption=(
                         "🎁 FREE Marin Kitagawa Pack\n\n"
-                        "Includes 5 exclusive HD wallpapers 📱\n\n"
-                        "✨ AI generated\n"
-                        "💖 Mobile optimized\n\n"
+                        "Includes 5 HD wallpapers 📱\n\n"
                         "Sending wallpapers below 👇"
                     )
                 )
@@ -211,30 +240,27 @@ def handle_text(message):
                     f.close()
 
             try:
-                new_count = increment_free_downloads()
-            except Exception as e:
-                new_count = "unknown"
-                bot.send_message(chat_id, f"⚠️ Stats error: {e}")
+                stats = update_stat("free_downloads")
+                downloads = stats.get("free_downloads", 0)
+            except Exception:
+                downloads = "unknown"
 
             bot.send_message(
                 chat_id,
                 "✅ Done! Enjoy your free wallpapers 💖\n\n"
-                f"Total free pack downloads: {new_count}"
+                f"🎁 Free pack claimed: {downloads} times"
             )
 
             if ADMIN_ID:
                 bot.send_message(
                     int(ADMIN_ID),
-                    "🎁 FREE Marin Kitagawa Pack downloaded\n\n"
-                    f"User: @{username if username else 'no_username'}\n"
+                    "🎁 FREE Marin Pack downloaded\n\n"
+                    f"User: @{username}\n"
                     f"User ID: {chat_id}\n"
-                    f"Total downloads: {new_count}"
+                    f"Total downloads: {downloads}"
                 )
         else:
-            bot.send_message(
-                chat_id,
-                "❌ One or more Marin wallpaper files are missing."
-            )
+            bot.send_message(chat_id, "❌ One or more Marin image files are missing.")
 
     elif text == "💖 Nami Pack":
         bot.send_message(chat_id, "💖 Nami Pack — $3\n\nPayment system coming soon.")
@@ -255,14 +281,13 @@ def handle_text(message):
             "✨ HD quality\n"
             "📱 Mobile optimized\n"
             "🎨 AI anime artwork\n"
-            "🎁 Free and premium packs\n\n"
-            "New packs are added regularly."
+            "🎁 Free and premium packs"
         )
 
     else:
         bot.send_message(chat_id, "Choose a pack from the menu 👇", reply_markup=main_menu())
 
 
-print("Bot started - Marin album version")
+print("Bot started - analytics version")
 bot.remove_webhook()
 bot.infinity_polling(skip_pending=True)
