@@ -34,19 +34,11 @@ FREE_IMAGES = [
 CUSTOM_IMAGE_STARS = 750
 
 
-bot.set_my_commands([
-    types.BotCommand("start", "Open main menu"),
-    types.BotCommand("free", "Get FREE Marin Kitagawa Pack"),
-    types.BotCommand("about", "About EgoEON AI"),
-    types.BotCommand("stats", "Bot statistics")
-])
-
-
 def default_stats():
     return {
         "starts": 0,
         "free_clicks": 0,
-        "free_downloads": 0
+        "free_delivered": 0
     }
 
 
@@ -65,7 +57,8 @@ def load_stats():
     r = requests.get(
         github_file_url(STATS_PATH),
         headers=github_headers(),
-        params={"ref": GITHUB_BRANCH}
+        params={"ref": GITHUB_BRANCH},
+        timeout=20
     )
 
     if r.status_code == 404:
@@ -80,9 +73,16 @@ def load_stats():
     except Exception:
         stats = default_stats()
 
+    # Convert old field if it exists
+    if "free_downloads" in stats and "free_delivered" not in stats:
+        stats["free_delivered"] = stats.get("free_downloads", 0)
+
     for key, value in default_stats().items():
         if key not in stats:
             stats[key] = value
+
+    # Remove old misleading field
+    stats.pop("free_downloads", None)
 
     return stats, data["sha"]
 
@@ -104,7 +104,8 @@ def save_stats(stats, sha=None):
     r = requests.put(
         github_file_url(STATS_PATH),
         headers=github_headers(),
-        json=payload
+        json=payload,
+        timeout=20
     )
     r.raise_for_status()
 
@@ -119,6 +120,15 @@ def update_stat(key):
 def get_stats():
     stats, _ = load_stats()
     return stats
+
+
+def register_commands():
+    bot.set_my_commands([
+        types.BotCommand("start", "Open main menu"),
+        types.BotCommand("free", "Get FREE Marin Kitagawa Pack"),
+        types.BotCommand("about", "About EgoEON AI"),
+        types.BotCommand("stats", "Bot statistics")
+    ])
 
 
 def main_menu():
@@ -149,11 +159,22 @@ def main_menu():
     return markup
 
 
-def send_main_menu(chat_id):
+def remove_old_keyboard(chat_id):
+    bot.send_message(
+        chat_id,
+        "Menu updated ✅",
+        reply_markup=types.ReplyKeyboardRemove()
+    )
+
+
+def send_main_menu(chat_id, remove_keyboard=True):
     try:
         stats = update_stat("starts")
     except Exception:
         stats = default_stats()
+
+    if remove_keyboard:
+        remove_old_keyboard(chat_id)
 
     bot.send_message(
         chat_id,
@@ -162,8 +183,8 @@ def send_main_menu(chat_id):
         "✅ 5 HD anime wallpapers\n"
         "📱 Phone optimized\n"
         "✨ AI generated\n\n"
-        f"🔥 Claimed by: {stats.get('free_downloads', 0)} people\n\n"
-        "Tap the button below to download instantly 👇",
+        f"🔥 Claimed by: {stats.get('free_delivered', 0)} people\n\n"
+        "Tap the button below to get the wallpapers instantly 👇",
         reply_markup=main_menu()
     )
 
@@ -171,6 +192,7 @@ def send_main_menu(chat_id):
 def send_free_pack(chat_id, user):
     username = user.username or "no_username"
 
+    # Count button click / command click
     try:
         update_stat("free_clicks")
     except Exception:
@@ -190,8 +212,12 @@ def send_free_pack(chat_id, user):
                 )
             )
 
-    if not all(os.path.exists(path) for path in FREE_IMAGES):
-        bot.send_message(chat_id, "❌ One or more Marin image files are missing.")
+    missing = [path for path in FREE_IMAGES if not os.path.exists(path)]
+    if missing:
+        bot.send_message(
+            chat_id,
+            "❌ Missing image files:\n" + "\n".join(missing)
+        )
         return
 
     files = []
@@ -203,38 +229,47 @@ def send_free_pack(chat_id, user):
             files.append(f)
             media.append(types.InputMediaPhoto(f))
 
+        # If this fails, free_delivered will NOT increase
         bot.send_media_group(chat_id, media)
+
+    except Exception as e:
+        bot.send_message(chat_id, f"❌ Could not send wallpapers: {e}")
+        return
 
     finally:
         for f in files:
-            f.close()
+            try:
+                f.close()
+            except Exception:
+                pass
 
+    # Count only after album was successfully sent
     try:
-        stats = update_stat("free_downloads")
-        downloads = stats.get("free_downloads", 0)
+        stats = update_stat("free_delivered")
+        delivered = stats.get("free_delivered", 0)
     except Exception:
-        downloads = "unknown"
+        delivered = "unknown"
 
     bot.send_message(
         chat_id,
         "✅ Done! Enjoy your free wallpapers 💖\n\n"
-        f"🎁 Free pack claimed: {downloads} times",
+        f"🎁 Free pack delivered: {delivered} times",
         reply_markup=main_menu()
     )
 
     if ADMIN_ID:
         bot.send_message(
             int(ADMIN_ID),
-            "🎁 FREE Marin Kitagawa Pack downloaded\n\n"
+            "🎁 FREE Marin Kitagawa Pack delivered\n\n"
             f"User: @{username}\n"
             f"User ID: {chat_id}\n"
-            f"Total downloads: {downloads}"
+            f"Total delivered: {delivered}"
         )
 
 
 @bot.message_handler(commands=["start"])
 def start(message):
-    send_main_menu(message.chat.id)
+    send_main_menu(message.chat.id, remove_keyboard=True)
 
 
 @bot.message_handler(commands=["free"])
@@ -268,8 +303,10 @@ def stats_command(message):
             message.chat.id,
             "📊 Bot Stats\n\n"
             f"Starts: {stats.get('starts', 0)}\n"
-            f"Free pack clicks: {stats.get('free_clicks', 0)}\n"
-            f"Free downloads: {stats.get('free_downloads', 0)}"
+            f"FREE clicks: {stats.get('free_clicks', 0)}\n"
+            f"FREE delivered: {stats.get('free_delivered', 0)}\n\n"
+            "Note: Telegram does not tell bots when a user saves an image.\n"
+            "FREE delivered means the bot successfully sent the full wallpaper album."
         )
     except Exception as e:
         bot.send_message(message.chat.id, f"Stats error: {e}")
@@ -355,6 +392,7 @@ def handle_text(message):
     )
 
 
-print("Bot started - inline menu version")
+print("Bot started - inline menu + delivered stats version")
 bot.remove_webhook()
+register_commands()
 bot.infinity_polling(skip_pending=True)
