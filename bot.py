@@ -12,6 +12,8 @@ GITHUB_REPO = os.getenv("GITHUB_REPO")
 GITHUB_BRANCH = os.getenv("GITHUB_BRANCH", "main")
 BOA_CHANNEL_ID = os.getenv("BOA_CHANNEL_ID")
 BOA_MESSAGE_ID = os.getenv("BOA_MESSAGE_ID")
+NAMI_CHANNEL_ID = os.getenv("NAMI_CHANNEL_ID")
+NAMI_MESSAGE_ID = os.getenv("NAMI_MESSAGE_ID")
 
 if not TOKEN:
     raise RuntimeError("BOT_TOKEN is not set")
@@ -39,7 +41,14 @@ BOA_PREVIEWS = [
     "boa_preview_03.png",
 ]
 
+NAMI_PREVIEWS = [
+    "nami_preview_01.png",
+    "nami_preview_02.png",
+    "nami_preview_03.png",
+]
+
 BOA_PACK_STARS = 99
+NAMI_PACK_STARS = 99
 CUSTOM_IMAGE_STARS = 750
 
 
@@ -56,11 +65,23 @@ def get_boa_source():
         return None, None
 
 
+def get_nami_source():
+    if not NAMI_CHANNEL_ID or not NAMI_MESSAGE_ID:
+        return None, None
+    try:
+        return int(NAMI_CHANNEL_ID), int(NAMI_MESSAGE_ID)
+    except ValueError:
+        return None, None
+
+
 def default_stats():
     return {
         "starts": 0,
         "free_clicks": 0,
         "free_delivered": 0,
+        "nami_clicks": 0,
+        "nami_sales": 0,
+        "nami_delivered": 0,
         "boa_clicks": 0,
         "boa_sales": 0,
         "boa_delivered": 0,
@@ -138,7 +159,8 @@ def get_stats():
 def register_commands():
     bot.set_my_commands([
         types.BotCommand("start", "Open main menu"),
-        types.BotCommand("free", "Get FREE Marin Kitagawa Pack"),
+        types.BotCommand("free", "Get FREE Starter Pack"),
+        types.BotCommand("nami", "Open Nami Premium Pack"),
         types.BotCommand("boa", "Open Boa Hancock Premium Pack"),
         types.BotCommand("about", "About EgoEON AI"),
         types.BotCommand("stats", "Bot statistics"),
@@ -147,23 +169,51 @@ def register_commands():
 
 def main_menu():
     markup = types.InlineKeyboardMarkup(row_width=1)
-    markup.add(types.InlineKeyboardButton(
-        "🎁 Download FREE Marin Kitagawa Pack", callback_data="free_pack"
-    ))
-    markup.row(
-        types.InlineKeyboardButton("💖 Nami Pack", callback_data="nami"),
-        types.InlineKeyboardButton("❤️ Yor Pack", callback_data="yor"),
-    )
-    markup.row(
-        types.InlineKeyboardButton("👑 Boa Hancock Pack — 99 ⭐", callback_data="boa"),
-        types.InlineKeyboardButton("🔥 All Packs Bundle", callback_data="bundle"),
-    )
-    markup.add(
-        types.InlineKeyboardButton("🎨 Custom Image — 750 ⭐", callback_data="custom"),
-        types.InlineKeyboardButton("ℹ️ About", callback_data="about"),
-    )
-    return markup
 
+    markup.add(
+        types.InlineKeyboardButton(
+            "🎁 FREE Starter Pack",
+            callback_data="free_pack",
+        )
+    )
+
+    markup.row(
+        types.InlineKeyboardButton(
+            "💖 Nami Premium Pack — 99 ⭐",
+            callback_data="nami",
+        ),
+        types.InlineKeyboardButton(
+            "👑 Boa Hancock Premium Pack — 99 ⭐",
+            callback_data="boa",
+        ),
+    )
+
+    markup.add(
+        types.InlineKeyboardButton(
+            "❤️ Yor Premium Pack — Coming Soon",
+            callback_data="yor",
+        )
+    )
+
+    markup.add(
+        types.InlineKeyboardButton(
+            "🔥 All Packs Bundle — Coming Soon",
+            callback_data="bundle",
+        )
+    )
+
+    markup.add(
+        types.InlineKeyboardButton(
+            "🎨 Custom Image — 750 ⭐",
+            callback_data="custom",
+        ),
+        types.InlineKeyboardButton(
+            "ℹ️ About",
+            callback_data="about",
+        ),
+    )
+
+    return markup
 
 def remove_old_keyboard(chat_id):
     bot.send_message(chat_id, "Menu updated ✅", reply_markup=types.ReplyKeyboardRemove())
@@ -178,13 +228,14 @@ def send_main_menu(chat_id, remove_keyboard=True):
         remove_old_keyboard(chat_id)
     bot.send_message(
         chat_id,
-        "🔥 Welcome to EgoEON AI Store\n\n"
-        "🎁 FREE Marin Kitagawa Pack\n"
-        "✅ 5 HD anime wallpapers\n"
-        "📱 Phone optimized\n"
-        "✨ AI generated\n\n"
-        f"🔥 Claimed by: {stats.get('free_delivered', 0)} people\n\n"
-        "Tap a button below 👇",
+        "🔥 EgoEON AI Store\n\n"
+        "🎁 FREE Starter Pack\n"
+        "(5 HD Wallpapers)\n\n"
+        "⭐ Premium Packs\n\n"
+        "💖 Nami\n"
+        "👑 Boa Hancock\n"
+        "❤️ Yor\n\n"
+        "👇 Choose your favorite character",
         reply_markup=main_menu(),
     )
 
@@ -252,6 +303,74 @@ def send_free_pack(chat_id, user):
             pass
 
 
+def send_nami_previews(chat_id):
+    try:
+        update_stat("nami_clicks")
+    except Exception:
+        pass
+
+    missing = [path for path in NAMI_PREVIEWS if not os.path.exists(path)]
+    if missing:
+        bot.send_message(
+            chat_id,
+            "❌ Nami previews are temporarily unavailable.\n\nMissing:\n"
+            + "\n".join(missing),
+        )
+        if ADMIN_ID:
+            try:
+                bot.send_message(
+                    int(ADMIN_ID),
+                    "⚠️ Missing Nami preview files:\n" + "\n".join(missing),
+                )
+            except Exception:
+                pass
+        return
+
+    files, media = [], []
+    try:
+        for index, path in enumerate(NAMI_PREVIEWS):
+            file = open(path, "rb")
+            files.append(file)
+            caption = None
+            if index == 0:
+                caption = (
+                    "💖 Nami Premium Pack\n\n"
+                    "✨ 20 HD anime wallpapers\n"
+                    "📱 Perfect for phones\n"
+                    "💻 Easy download on PC\n"
+                    "📦 Delivered as one ZIP archive\n"
+                    "🚫 No watermarks\n\n"
+                    "⭐ Price: 99 Stars"
+                )
+            media.append(types.InputMediaPhoto(media=file, caption=caption))
+
+        bot.send_media_group(chat_id, media)
+
+    except Exception as error:
+        bot.send_message(chat_id, f"❌ Could not send Nami previews: {error}")
+        return
+
+    finally:
+        for file in files:
+            try:
+                file.close()
+            except Exception:
+                pass
+
+    bot.send_invoice(
+        chat_id=chat_id,
+        title="Nami Wallpaper Pack",
+        description=(
+            "20 HD Nami wallpapers delivered as one ZIP archive. "
+            "Downloadable on phone and PC."
+        ),
+        invoice_payload="nami_pack_99",
+        provider_token="",
+        currency="XTR",
+        prices=[types.LabeledPrice(label="Nami Pack", amount=NAMI_PACK_STARS)],
+    )
+
+
 def send_boa_previews(chat_id):
     try:
         update_stat("boa_clicks")
@@ -309,6 +428,88 @@ def send_boa_previews(chat_id):
         currency="XTR",
         prices=[types.LabeledPrice(label="Boa Hancock Pack", amount=BOA_PACK_STARS)],
     )
+
+
+def deliver_nami_pack(message):
+    channel_id, message_id = get_nami_source()
+
+    if channel_id is None or message_id is None:
+        bot.send_message(
+            message.chat.id,
+            "⚠️ Payment received, but the Nami pack is temporarily unavailable.\n"
+            "Support has been notified.",
+        )
+        if ADMIN_ID:
+            try:
+                bot.send_message(
+                    int(ADMIN_ID),
+                    "🚨 Nami payment received, but NAMI_CHANNEL_ID or "
+                    "NAMI_MESSAGE_ID is not configured.\n\n"
+                    f"Buyer ID: {message.chat.id}",
+                )
+            except Exception:
+                pass
+        return False
+
+    try:
+        bot.send_message(
+            message.chat.id,
+            "✅ Payment received!\n\nYour Nami pack is ready 👇",
+        )
+
+        bot.copy_message(
+            chat_id=message.chat.id,
+            from_chat_id=channel_id,
+            message_id=message_id,
+        )
+
+        try:
+            stats = update_stat("nami_delivered")
+            total_delivered = stats.get("nami_delivered", 0)
+        except Exception:
+            total_delivered = "unknown"
+
+        bot.send_message(
+            message.chat.id,
+            "✅ Nami Premium Pack delivered!\n\n"
+            "📱 On phone: tap the ZIP file and download it.\n"
+            "💻 On PC: click the download icon and extract the archive.\n\n"
+            "Thank you for your purchase 💖",
+            reply_markup=main_menu(),
+        )
+
+        if ADMIN_ID:
+            try:
+                bot.send_message(
+                    int(ADMIN_ID),
+                    "💰 Nami Premium Pack sold!\n\n"
+                    f"User: @{message.from_user.username or 'no_username'}\n"
+                    f"User ID: {message.chat.id}\n"
+                    f"Stars paid: {message.successful_payment.total_amount}\n"
+                    f"Total Nami deliveries: {total_delivered}",
+                )
+            except Exception:
+                pass
+
+        return True
+
+    except Exception as error:
+        bot.send_message(
+            message.chat.id,
+            "⚠️ Payment was received, but Telegram could not deliver the Nami ZIP.\n"
+            "Support has been notified.",
+        )
+        if ADMIN_ID:
+            try:
+                bot.send_message(
+                    int(ADMIN_ID),
+                    "🚨 Nami Pack delivery error\n\n"
+                    f"Buyer ID: {message.chat.id}\n"
+                    f"Error: {error}",
+                )
+            except Exception:
+                pass
+        return False
 
 
 def deliver_boa_pack(message):
@@ -392,6 +593,11 @@ def free_command(message):
     send_free_pack(message.chat.id, message.from_user)
 
 
+@bot.message_handler(commands=["nami"])
+def nami_command(message):
+    send_nami_previews(message.chat.id)
+
+
 @bot.message_handler(commands=["boa"])
 def boa_command(message):
     send_boa_previews(message.chat.id)
@@ -401,7 +607,7 @@ def boa_command(message):
 def about_command(message):
     bot.send_message(
         message.chat.id,
-        "EgoEON AI creates anime wallpaper packs.\n\n"
+        "🔥 EgoEON AI Store\n\n"
         "✨ HD quality\n"
         "📱 Mobile optimized\n"
         "💻 PC-friendly downloads\n"
@@ -425,6 +631,9 @@ def stats_command(message):
             f"Starts: {stats.get('starts', 0)}\n"
             f"FREE clicks: {stats.get('free_clicks', 0)}\n"
             f"FREE delivered: {stats.get('free_delivered', 0)}\n\n"
+            f"Nami clicks: {stats.get('nami_clicks', 0)}\n"
+            f"Nami sales: {stats.get('nami_sales', 0)}\n"
+            f"Nami delivered: {stats.get('nami_delivered', 0)}\n\n"
             f"Boa clicks: {stats.get('boa_clicks', 0)}\n"
             f"Boa sales: {stats.get('boa_sales', 0)}\n"
             f"Boa delivered: {stats.get('boa_delivered', 0)}\n\n"
@@ -443,7 +652,7 @@ def callback_handler(call):
         send_free_pack(chat_id, call.from_user)
     elif call.data == "nami":
         bot.answer_callback_query(call.id)
-        bot.send_message(chat_id, "💖 Nami Pack — coming soon.", reply_markup=main_menu())
+        send_nami_previews(chat_id)
     elif call.data == "yor":
         bot.answer_callback_query(call.id)
         bot.send_message(chat_id, "❤️ Yor Pack — coming soon.", reply_markup=main_menu())
@@ -477,6 +686,14 @@ def checkout(pre_checkout_query):
 @bot.message_handler(content_types=["successful_payment"])
 def got_payment(message):
     payment = message.successful_payment
+    if payment.invoice_payload == "nami_pack_99":
+        try:
+            update_stat("nami_sales")
+        except Exception:
+            pass
+        deliver_nami_pack(message)
+        return
+
     if payment.invoice_payload == "boa_hancock_pack_99":
         try:
             update_stat("boa_sales")
@@ -511,24 +728,37 @@ def got_payment(message):
 def storage_channel_document(message):
     if not ADMIN_ID:
         return
+
+    file_name = message.document.file_name or "document"
+    lower_name = file_name.lower()
+
+    if "nami" in lower_name:
+        channel_variable = "NAMI_CHANNEL_ID"
+        message_variable = "NAMI_MESSAGE_ID"
+    elif "boa" in lower_name or "hancock" in lower_name:
+        channel_variable = "BOA_CHANNEL_ID"
+        message_variable = "BOA_MESSAGE_ID"
+    else:
+        channel_variable = "PACK_CHANNEL_ID"
+        message_variable = "PACK_MESSAGE_ID"
+
     try:
         bot.send_message(
             int(ADMIN_ID),
             "📦 Storage channel document detected\n\n"
-            f"BOA_CHANNEL_ID={message.chat.id}\n"
-            f"BOA_MESSAGE_ID={message.message_id}\n\n"
-            f"File: {message.document.file_name or 'document'}",
+            f"{channel_variable}={message.chat.id}\n"
+            f"{message_variable}={message.message_id}\n\n"
+            f"File: {file_name}",
         )
     except Exception:
         pass
-
 
 @bot.message_handler(content_types=["text"])
 def handle_text(message):
     bot.send_message(message.chat.id, "Use the menu below 👇", reply_markup=main_menu())
 
 
-print("Bot started - Boa Hancock paid pack + Telegram storage")
+print("Bot started - Nami + Boa premium packs")
 bot.remove_webhook()
 register_commands()
 bot.infinity_polling(skip_pending=True, timeout=30, long_polling_timeout=30)
